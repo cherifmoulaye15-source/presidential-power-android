@@ -1,3 +1,4 @@
+
 name: Build PRESIDENTIAL POWER Android APK
 
 on:
@@ -9,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,7 +18,7 @@ jobs:
       - name: Extract project
         run: |
           unzip -q PRESIDENTIAL_POWER_V74_8_ANDROID_CLOUD_BUILD.zip -d extracted
-          ls -la extracted
+          find extracted -name package.json
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -29,25 +31,42 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Install dependencies
-        working-directory: extracted
+      - name: Locate project
         run: |
-          PROJECT_DIR=$(find . -name package.json -printf '%h\n' | head -1)
+          PROJECT_DIR=$(find extracted -name package.json -printf '%h\n' | head -1)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: package.json introuvable"
+            exit 1
+          fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Projet trouvé : $PROJECT_DIR"
+
+      - name: Install dependencies
+        run: |
           cd "$PROJECT_DIR"
           npm install
+          npm install @capacitor/core@^8 @capacitor/android@^8
+          npm install --save-dev @capacitor/cli@^8
 
       - name: Generate Android project
-        run: cd "$PROJECT_DIR" && npx cap add android
+        run: |
+          cd "$PROJECT_DIR"
+          npx cap add android
 
       - name: Synchronize
-        run: cd "$PROJECT_DIR" && npx cap sync android
+        run: |
+          cd "$PROJECT_DIR"
+          npx cap sync android
 
       - name: Build APK
-        run: cd "$PROJECT_DIR/android" && chmod +x gradlew && ./gradlew assembleDebug
+        run: |
+          cd "$PROJECT_DIR/android"
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PRESIDENTIAL-POWER-V74.8-APK
           path: extracted/**/android/app/build/outputs/apk/debug/app-debug.apk
+          
