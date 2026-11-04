@@ -1,0 +1,53 @@
+name: Build PRESIDENTIAL POWER Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract project
+        run: |
+          unzip -q PRESIDENTIAL_POWER_V74_8_ANDROID_CLOUD_BUILD.zip -d extracted
+          ls -la extracted
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        working-directory: extracted
+        run: |
+          PROJECT_DIR=$(find . -name package.json -printf '%h\n' | head -1)
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          cd "$PROJECT_DIR"
+          npm install
+
+      - name: Generate Android project
+        run: cd "$PROJECT_DIR" && npx cap add android
+
+      - name: Synchronize
+        run: cd "$PROJECT_DIR" && npx cap sync android
+
+      - name: Build APK
+        run: cd "$PROJECT_DIR/android" && chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PRESIDENTIAL-POWER-V74.8-APK
+          path: extracted/**/android/app/build/outputs/apk/debug/app-debug.apk
