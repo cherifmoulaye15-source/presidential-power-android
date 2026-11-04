@@ -1,4 +1,4 @@
-name: Build PRESIDENTIAL POWER Android APK
+name: Build PRESIDENTIAL POWER Android APK V74.9
 
 on:
   workflow_dispatch:
@@ -9,27 +9,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract project
+      - name: Extract V74.9 project
         run: |
-          unzip -q PRESIDENTIAL_POWER_V74_8_ANDROID_CLOUD_BUILD.zip -d extracted
-          ls -la extracted
+          unzip -q PRESIDENTIAL_POWER_V74_9_ANDROID_DEEP_LINK.zip -d extracted
 
       - name: Locate project
         run: |
-          PROJECT_DIR=$(find extracted -name package.json -not -path '*/node_modules/*' -printf '%h\n' | head -1)
-
-          if [ -z "$PROJECT_DIR" ]; then
+          PACKAGE_JSON=$(find extracted -name package.json -not -path '*/node_modules/*' | head -1)
+          if [ -z "$PACKAGE_JSON" ]; then
             echo "ERREUR : package.json introuvable"
             exit 1
           fi
-
+          PROJECT_DIR=$(dirname "$PACKAGE_JSON")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Projet trouvé : $PROJECT_DIR"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -48,10 +44,40 @@ jobs:
           npm install
           npm install --save-dev typescript
 
+      - name: Build deep-link bridge
+        run: |
+          cd "$PROJECT_DIR"
+          npx esbuild deep-link.js --bundle --format=iife --outfile=www/deep-link.bundle.js
+
       - name: Generate Android project
         run: |
           cd "$PROJECT_DIR"
           npx cap add android
+
+      - name: Configure Android deep link
+        run: |
+          python3 - "$PROJECT_DIR/android/app/src/main/AndroidManifest.xml" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          manifest = Path(sys.argv[1])
+          content = manifest.read_text(encoding="utf-8")
+          if 'android:host="login-callback"' not in content:
+              match = re.search(r'<activity\\b(?=[^>]*android:name=["\\']\\.MainActivity["\\'])[^>]*>', content)
+              if not match:
+                  raise SystemExit("MainActivity introuvable dans AndroidManifest.xml")
+              intent_filter = '''
+                  <intent-filter>
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="com.presidentialpower.game" android:host="login-callback" />
+                  </intent-filter>
+              '''
+              content = content[:match.end()] + intent_filter + content[match.end():]
+              manifest.write_text(content, encoding="utf-8")
+          PY
 
       - name: Synchronize
         run: |
@@ -67,7 +93,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PRESIDENTIAL-POWER-V74.8-APK
+          name: PRESIDENTIAL-POWER-V74.9-APK
           path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
