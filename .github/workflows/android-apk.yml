@@ -1,4 +1,5 @@
-name: Build PRESIDENTIAL POWER Android APK V75.0
+
+name: Build PRESIDENTIAL POWER Android APK V75.0 TEST
 
 on:
   workflow_dispatch:
@@ -14,16 +15,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract V75.0 project
+      - name: Extract V75.0 TEST project
         run: |
-          unzip -q PRESIDENTIAL_POWER_V75_0_ANDROID.zip -d extracted
-          echo "PROJECT_DIR=$GITHUB_WORKSPACE/extracted/PRESIDENTIAL_POWER_V75_0_ANDROID" >> "$GITHUB_ENV"
+          unzip -q PRESIDENTIAL_POWER_V75_0_ANDROID_TEST.zip -d extracted
 
-      - name: Verify project
+      - name: Locate project
         run: |
-          test -f "$PROJECT_DIR/package.json"
-          test -f "$PROJECT_DIR/www/index.html"
-          test -f "$PROJECT_DIR/capacitor.config.json"
+          PACKAGE_JSON=$(find extracted -name package.json -not -path '*/node_modules/*' | head -1)
+          if [ -z "$PACKAGE_JSON" ]; then
+            echo "ERREUR : package.json introuvable"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$PACKAGE_JSON")
+          echo "PROJECT_DIR=$GITHUB_WORKSPACE/$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Projet trouvé : $PROJECT_DIR"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -40,6 +45,14 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           npm install
+
+      - name: Verify application configuration
+        run: |
+          cd "$PROJECT_DIR"
+          test -f package.json
+          test -f www/index.html
+          test -f capacitor.config.json
+          grep -q 'com.presidentialpower.game.v750test' capacitor.config.json
 
       - name: Generate Android project
         run: |
@@ -60,7 +73,8 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PRESIDENTIAL-POWER-V75.0-APK
+          name: PRESIDENTIAL-POWER-V75.0-TEST-APK
           path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+          
